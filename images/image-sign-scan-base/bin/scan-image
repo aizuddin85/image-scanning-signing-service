@@ -13,6 +13,12 @@ NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 SA_JSON=$(oc get sa -n $NAMESPACE $SA_NAME -o json)
 DOCKERCFG_SECRET_NAME=$(echo "${SA_JSON}" | jq -r ".imagePullSecrets[] | select( .name | contains(\"${SA_NAME}-dockercfg\")).name")
 
-oc get secret -n $NAMESPACE $DOCKERCFG_SECRET_NAME -o json | jq -r ".data[] | select(\".dockercfg\")" | base64 -d > $DOCKER_CFG_HOME/.dockercfg
+# Let`s clean up dockercfg
+echo > $DOCKER_CFG_HOME/.dockercfg
+
+# From each pull secret found extract the data and decode into dockercfg.
+for SECRETS in $DOCKERCFG_SECRET_NAME; do
+oc get secret -n $NAMESPACE $SECRETS -o json | jq -r ".data[] " | base64 -d >> $DOCKER_CFG_HOME/.dockercfg
+done
 
 image-inspector -chroot --path=${IMAGE_CONTENT} --scan-results-dir=${RESULTS} --scan-type=openscap  --dockercfg=$DOCKER_CFG_HOME/.dockercfg --image=$IMAGE -serve=0.0.0.0:8080
